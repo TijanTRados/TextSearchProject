@@ -1,0 +1,111 @@
+CREATE TABLE documents
+( 	title text,
+	keyword text,
+	abstract text,
+	body text,
+	vector	tsvector
+);
+
+
+INSERT INTO documents
+VALUES 
+('My computer', 'computer, programs, games', 'Short introduction to what I do on my computer', 'I really love my computer. Even if it laggs a lot, i do a lot of stuff on it. For exaple, I love being on Facebook, Tumblr and Twitter. Sometimes i play Dofus or Legend of Zelda. I have a lot of programs such as Skype, Google chrome and Visual Studio. My computers name is Tiki-PC.')
+;
+INSERT INTO documents
+VALUES 
+('Sushi', 'sushi, nori, nigiri, maki, salmon, tuna, rice, rice vinegar, soy, soy sauce', 'In this article you can read something about my sushi skills.', 'Sushi is one of my favourite meals. More than eating it, i love to make it. I have a rice cooker that i recently bought from Delimano and I prepare rice in it. It takes 30 minutes for rice to be ready. First, I wash it in cold water several times to get better sushi rice. Then I leave it in cold water for 30 minutes. Afterwise, I put it in the rice cooker and set the temperature to 115 degrees celsius, and cook it for 20 minutes. In the meantime, I prepare the salmon, tuna, cucumbers, sesame seed and nori. When the rice is cooked, I mix rice vinegar, sugar and salt in it and leave it for 20 minutes, or until it reachs temperature of 25 degrees celsius. When the rice is cold enough, I start making sushi rolls. Its called maki. Nigiri is other type of sushi when I put salmon or tuna on top of some rice. When its all prepared, its put in the fridge for 30 minutes. After that, i eat it with soy sauce or sesame seed.')
+
+
+DELETE FROM documents
+
+
+CREATE FUNCTION tsvector_create() RETURNS TRIGGER AS $$
+BEGIN
+    NEW.vector := 	setweight(to_tsvector('english', NEW.title), 'A') ||
+			setweight(to_tsvector('english', NEW.keyword), 'B') ||
+			setweight(to_tsvector('english', NEW.summary), 'C') ||
+			setweight(to_tsvector('english', NEW.body), 'D');
+
+    RETURN NEW;
+END
+$$ LANGUAGE 'plpgsql';
+
+
+CREATE TRIGGER insert_trigger
+BEFORE INSERT OR UPDATE ON documents
+FOR EACH ROW
+EXECUTE PROCEDURE tsvector_create()
+
+
+DROP FUNCTION public.tsvector_create() cascade
+
+SELECT title, ts_rank_cd(vector, query) AS rank
+FROM documents, to_tsquery('sushi & nori') query
+WHERE  query @@ vector
+ORDER BY rank DESC LIMIT 10;
+
+
+********************************UPIT
+
+select ts_headline(title, to_tsquery('english', 'sushi & salmon')) as name,
+ts_headline(body, to_tsquery('english', 'sushi & salmon')), ts_rank (vector, to_tsquery('english', 'sushi & salmon'))
+from documents
+where vector @@ to_tsquery('english', 'sushi & salmon')
+order by rank desc
+
+******************************UPIT ŠPRANCA
+
+select ts_headline(title, to_tsquery('english', querystring)) as name,
+ts_headline(body, to_tsquery('english', querystring)), ts_rank (vector, to_tsquery('english', querystring))
+from documents
+where vector @@ to_tsquery('english', querystring)
+
+
+******************************** LEVENSHTeIN
+
+SELECT title, levenshtein (lower('sushi love'), lower(title))
+FROM documents
+WHERE levenshtein (lower('sushi love'), lower(title)) < (length(title))
+ORDER BY levenshtein (lower('sushi love'), lower(title))
+
+
+
+
+:::::::::::::::::::::::::::::::::::PIVOT TABLE:::::::::::::::::::::::
+
+CREATE TEMP TABLE dan (dan int);
+INSERT INTO dan VALUES (26);
+INSERT INTO dan VALUES (27);
+INSERT INTO dan VALUES (28);
+
+
+SELECT *
+FROM crosstab ('SELECT CAST(query as char(50)) AS upit
+, CAST(extract(day from date_time) AS int) as dan
+, CAST(count(*) AS int) AS brojupita
+FROM analisys
+GROUP BY upit, dan
+ORDER BY upit, dan'
+, 'SELECT CAST(dan as INT) FROM dan ORDER BY dan')
+AS pivotTable (query Char(50)
+, d26 INT, d27 INT, d28 INT)
+ORDER BY query
+
+
+CREATE TEMP TABLE sat (sat int);
+INSERT INTO sat VALUES (2);
+INSERT INTO sat VALUES (3);
+INSERT INTO sat VALUES (4);
+
+
+SELECT *
+FROM crosstab ('SELECT CAST(query as char(50)) AS upit
+, CAST(extract(hour from date_time) AS int) as sat
+, CAST(count(*) AS int) AS brojupita
+FROM analisys
+GROUP BY upit, sat
+ORDER BY upit, sat'
+, 'SELECT CAST(sat as INT) FROM sat ORDER BY sat')
+AS pivotTable (query Char(50)
+, h02 INT, h03 INT, h04 INT)
+ORDER BY query
